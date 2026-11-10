@@ -1,0 +1,1654 @@
+openapi: 3.1.0
+info:
+  title: Hammad Sadi Portfolio API
+  version: 1.0.0
+  description: >
+    REST API for the personal portfolio and blogging platform of Hammad Sadi.
+    Authentication uses HTTP-only cookies (access_token + refresh_token).
+    All responses have the shape: { success, message, data?, meta? }.
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local development
+  - url: https://hs-portfolio.vercel.app/api
+    description: Production (Vercel serverless)
+
+tags:
+  - name: Auth
+    description: Registration, login, OAuth, token management, password reset
+  - name: Users
+    description: User profiles, settings, account management
+  - name: Follow
+    description: Follow / unfollow, followers & following lists, suggestions
+  - name: Feed
+    description: Personalised (following) feed and trending feed
+  - name: Posts
+    description: Blog post authoring and reading
+  - name: Comments
+    description: Threaded comments on posts
+  - name: Likes
+    description: Like / unlike posts and comments
+  - name: Views
+    description: View recording and analytics
+  - name: Profile
+    description: Portfolio owner public profile
+  - name: Skills
+    description: Portfolio skills
+  - name: Projects
+    description: Portfolio projects
+  - name: Experiences
+    description: Work experience
+  - name: Education
+    description: Education history
+  - name: Testimonials
+    description: Testimonials
+  - name: Site Settings
+    description: Global site configuration (admin)
+  - name: Dashboard
+    description: Admin analytics dashboard
+  - name: Upload
+    description: File uploads (Cloudinary)
+  - name: Contact
+    description: Contact messages
+  - name: Internal
+    description: Internal cron-triggered endpoints
+
+# ─── Reusable components ─────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: HTTP-only JWT access cookie set at login / refresh
+
+  schemas:
+    # ── Generic wrapper ───────────────────────────────────────────────────────
+    SuccessResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Operation succeeded" }
+        data:
+          description: Payload (omitted when empty)
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Validation failed" }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:    { type: integer }
+        page:     { type: integer }
+        limit:    { type: integer }
+        totalPages: { type: integer }
+        hasMore:  { type: boolean }
+
+    CursorMeta:
+      type: object
+      properties:
+        hasMore:    { type: boolean }
+        nextCursor: { type: string, nullable: true }
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    RegisterInput:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:     { type: string, minLength: 2, maxLength: 100, example: "Jane Doe" }
+        email:    { type: string, format: email, example: "jane@example.com" }
+        password: { type: string, minLength: 8, maxLength: 100, example: "Secret1!" }
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:    { type: string, format: email }
+        password: { type: string }
+
+    # ── User ──────────────────────────────────────────────────────────────────
+    UserPublic:
+      type: object
+      properties:
+        _id:                { type: string, example: "64a..." }
+        name:               { type: string }
+        email:              { type: string, format: email }
+        username:           { type: string, nullable: true }
+        avatar:             { type: string, format: uri, nullable: true }
+        coverImage:         { type: string, format: uri, nullable: true }
+        bio:                { type: string, nullable: true, maxLength: 300 }
+        location:           { type: string, nullable: true }
+        website:            { type: string, format: uri, nullable: true }
+        socialLinks:
+          type: array
+          items: { $ref: '#/components/schemas/SocialLink' }
+        profileVisibility:  { type: string, enum: [public, private-stats] }
+        showProfileViews:   { type: boolean }
+        role:               { type: string, enum: [user, admin] }
+        providers:          { type: array, items: { type: string } }
+        isEmailVerified:    { type: boolean }
+        isBlocked:          { type: boolean }
+        lastLoginAt:        { type: string, format: date-time, nullable: true }
+        followerCount:      { type: integer }
+        followingCount:     { type: integer }
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
+        createdAt:          { type: string, format: date-time }
+        updatedAt:          { type: string, format: date-time }
+
+    UserPublicProfile:
+      type: object
+      description: Public-safe profile shape returned by GET /users/:username
+      properties:
+        _id:            { type: string }
+        name:           { type: string }
+        username:       { type: string, nullable: true }
+        avatar:         { type: string, format: uri, nullable: true }
+        coverImage:     { type: string, format: uri, nullable: true }
+        bio:            { type: string, nullable: true }
+        location:       { type: string, nullable: true }
+        website:        { type: string, format: uri, nullable: true }
+        socialLinks:
+          type: array
+          items: { $ref: '#/components/schemas/SocialLink' }
+        followerCount:  { type: integer }
+        followingCount: { type: integer }
+        postCount:      { type: integer }
+        isFollowedByMe: { type: boolean }
+        createdAt:      { type: string, format: date-time }
+
+    SocialLink:
+      type: object
+      required: [platform, url]
+      properties:
+        platform: { type: string, maxLength: 50, example: "twitter" }
+        url:      { type: string, format: uri, example: "https://twitter.com/handle" }
+
+    NotificationPreferences:
+      type: object
+      properties:
+        newFollower:    { type: boolean }
+        comments:       { type: boolean }
+        replies:        { type: boolean }
+        productUpdates: { type: boolean }
+
+    UpdateProfileInput:
+      type: object
+      description: >
+        All fields optional. Unknown keys are rejected with 400 (strict schema).
+        email is intentionally absent and cannot be changed.
+      properties:
+        name:          { type: string, minLength: 2, maxLength: 100 }
+        username:
+          type: string
+          minLength: 3
+          maxLength: 30
+          pattern: '^[a-z0-9_]+$'
+          description: Can only be changed once every 30 days
+        bio:           { type: string, maxLength: 300, nullable: true }
+        avatar:        { type: string, format: uri, nullable: true }
+        coverImage:    { type: string, format: uri, nullable: true }
+        location:      { type: string, maxLength: 100, nullable: true }
+        website:       { type: string, format: uri, nullable: true }
+        socialLinks:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/SocialLink' }
+        profileVisibility: { type: string, enum: [public, private-stats] }
+        showProfileViews:  { type: boolean }
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword:     { type: string, minLength: 8, maxLength: 100 }
+
+    SetPasswordInput:
+      type: object
+      required: [otp, newPassword]
+      properties:
+        otp:         { type: string, pattern: '^\d{6}$', example: "123456" }
+        newPassword: { type: string, minLength: 8, maxLength: 100 }
+
+    DeleteAccountInput:
+      type: object
+      description: Password accounts send password; OAuth-only accounts send otp. One is required.
+      properties:
+        password: { type: string }
+        otp:      { type: string, pattern: '^\d{6}$' }
+
+    # ── Follow ────────────────────────────────────────────────────────────────
+    FollowUser:
+      type: object
+      properties:
+        _id:            { type: string }
+        name:           { type: string }
+        avatar:         { type: string, format: uri, nullable: true }
+        followerCount:  { type: integer }
+        isFollowedByMe: { type: boolean }
+
+    SuggestionResult:
+      type: object
+      properties:
+        _id:           { type: string }
+        name:          { type: string }
+        avatar:        { type: string, format: uri, nullable: true }
+        followerCount: { type: integer }
+        mutualCount:   { type: integer }
+
+    # ── Post ─────────────────────────────────────────────────────────────────
+    PostSummary:
+      type: object
+      properties:
+        _id:          { type: string }
+        title:        { type: string }
+        slug:         { type: string }
+        excerpt:      { type: string }
+        coverImage:   { type: string, format: uri, nullable: true }
+        readingTime:  { type: integer }
+        viewCount:    { type: integer }
+        likeCount:    { type: integer }
+        commentCount: { type: integer }
+        publishedAt:  { type: string, format: date-time, nullable: true }
+        tags:         { type: array, items: { type: string } }
+        category:     { type: string, nullable: true }
+        author:
+          type: object
+          properties:
+            _id:    { type: string }
+            name:   { type: string }
+            avatar: { type: string, nullable: true }
+
+    # ── View ─────────────────────────────────────────────────────────────────
+    RecordViewInput:
+      type: object
+      required: [targetType, targetId]
+      properties:
+        targetType: { type: string, enum: [post, profile] }
+        targetId:   { type: string, example: "64a..." }
+
+    RecordViewResult:
+      type: object
+      properties:
+        counted: { type: boolean }
+
+    UserAnalytics:
+      type: object
+      properties:
+        range:              { type: string, enum: [7d, 30d, 90d] }
+        totalViews:         { type: integer }
+        uniqueViews:        { type: integer }
+        followerCount:      { type: integer }
+        followingCount:     { type: integer }
+        totalPosts:         { type: integer }
+        totalLikes:         { type: integer }
+        totalComments:      { type: integer }
+        viewsDelta:         { type: number, description: "% change vs previous period" }
+        followersDelta:     { type: number }
+        viewsTimeline:
+          type: array
+          items:
+            type: object
+            properties:
+              date:        { type: string, format: date }
+              views:       { type: integer }
+              uniqueViews: { type: integer }
+        topPosts:
+          type: array
+          items:
+            type: object
+            properties:
+              _id:   { type: string }
+              title: { type: string }
+              slug:  { type: string }
+              views: { type: integer }
+
+# ─── Paths ──────────────────────────────────────────────────────────────────
+paths:
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # AUTH
+  # ══════════════════════════════════════════════════════════════════════════
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterInput' }
+      responses:
+        '201':
+          description: User created; verification email sent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+        '409': { description: Email already registered }
+        '429': { description: Rate limit exceeded }
+
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Verify email with OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email: { type: string, format: email }
+                otp:   { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200': { description: Email verified; cookies set }
+        '400': { description: Invalid or expired OTP }
+
+  /auth/resend-otp:
+    post:
+      tags: [Auth]
+      summary: Resend verification OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: OTP sent }
+        '429': { description: Rate limit or resend cooldown }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '200':
+          description: Authenticated; access_token + refresh_token cookies set
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UserPublic' }
+        '401': { description: Invalid credentials }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token using refresh cookie
+      responses:
+        '200': { description: New access_token cookie set }
+        '401': { description: Invalid or expired refresh token }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out (clears cookies and revokes token)
+      responses:
+        '200': { description: Logged out }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UserPublic' }
+        '401': { description: Not authenticated }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password-reset OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: OTP sent (always 200 to prevent user enumeration) }
+
+  /auth/verify-reset-otp:
+    post:
+      tags: [Auth]
+      summary: Verify password-reset OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email: { type: string, format: email }
+                otp:   { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200': { description: OTP verified; short-lived reset cookie set }
+        '400': { description: Invalid or expired OTP }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Set new password after OTP verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, newPassword]
+              properties:
+                email:       { type: string, format: email }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        '200': { description: Password reset; all sessions revoked }
+        '400': { description: OTP not verified or expired }
+
+  /auth/google:
+    get:
+      tags: [Auth]
+      summary: Initiate Google OAuth flow
+      responses:
+        '302': { description: Redirect to Google consent screen }
+
+  /auth/google/callback:
+    get:
+      tags: [Auth]
+      summary: Google OAuth callback
+      responses:
+        '302': { description: Redirect to client with cookies set on success }
+
+  /auth/github:
+    get:
+      tags: [Auth]
+      summary: Initiate GitHub OAuth flow
+      responses:
+        '302': { description: Redirect to GitHub consent screen }
+
+  /auth/github/callback:
+    get:
+      tags: [Auth]
+      summary: GitHub OAuth callback
+      responses:
+        '302': { description: Redirect to client with cookies set on success }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # USERS
+  # ══════════════════════════════════════════════════════════════════════════
+  /users:
+    get:
+      tags: [Users]
+      summary: List all users (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Searches name and email
+        - in: query
+          name: role
+          schema: { type: string, enum: [user, admin] }
+        - in: query
+          name: isBlocked
+          schema: { type: boolean }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/UserPublic' }
+                      meta: { $ref: '#/components/schemas/PaginationMeta' }
+        '403': { description: Admin only }
+
+  /users/me:
+    patch:
+      tags: [Users]
+      summary: Update own profile
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileInput' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UserPublic' }
+        '400': { description: Validation error or unknown field (strict schema) }
+        '409': { description: Username taken or cooldown not elapsed }
+
+    delete:
+      tags: [Users]
+      summary: Delete own account (soft delete)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteAccountInput' }
+      responses:
+        '200': { description: Account deleted; cookies cleared }
+        '400': { description: Wrong password or invalid OTP }
+
+  /users/me/analytics:
+    get:
+      tags: [Users, Views]
+      summary: Get own view + engagement analytics
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: range
+          schema: { type: string, enum: [7d, 30d, 90d], default: 30d }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UserAnalytics' }
+
+  /users/me/change-password:
+    post:
+      tags: [Users]
+      summary: Change password (password accounts only)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordInput' }
+      responses:
+        '200': { description: Password changed; all sessions revoked; cookies cleared }
+        '400': { description: Wrong current password or social login account }
+        '429': { description: Rate limit exceeded }
+
+  /users/me/set-password/request:
+    post:
+      tags: [Users]
+      summary: Request OTP to set a password (OAuth-only accounts)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OTP sent to registered email }
+        '400': { description: Account already has a password }
+        '429': { description: Rate limit exceeded }
+
+  /users/me/set-password:
+    post:
+      tags: [Users]
+      summary: Set password with OTP (OAuth-only accounts)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetPasswordInput' }
+      responses:
+        '200': { description: Password set successfully }
+        '400': { description: Invalid OTP or account already has password }
+
+  /users/me/delete-account/request-otp:
+    post:
+      tags: [Users]
+      summary: Request OTP for account deletion (OAuth-only accounts)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OTP sent }
+        '400': { description: Password accounts must use their password instead }
+
+  /users/suggestions:
+    get:
+      tags: [Users, Follow]
+      summary: Get follow suggestions (FoF + popular)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10, maximum: 20 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/SuggestionResult' }
+
+  /users/{identifier}:
+    get:
+      tags: [Users]
+      summary: Get user by username (public) or by ObjectId (admin)
+      parameters:
+        - in: path
+          name: identifier
+          required: true
+          schema: { type: string }
+          description: Username or 24-hex ObjectId (admin only for ObjectId)
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - $ref: '#/components/schemas/UserPublicProfile'
+                          - $ref: '#/components/schemas/UserPublic'
+        '404': { description: User not found }
+
+  /users/{id}:
+    patch:
+      tags: [Users]
+      summary: Admin update user (role, isBlocked, name)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:      { type: string, enum: [user, admin] }
+                isBlocked: { type: boolean }
+                name:      { type: string }
+      responses:
+        '200': { description: User updated }
+        '403': { description: Admin only }
+        '404': { description: User not found }
+
+    delete:
+      tags: [Users]
+      summary: Admin hard-delete user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: User deleted }
+        '403': { description: Admin only }
+
+  /users/{id}/block:
+    patch:
+      tags: [Users]
+      summary: Admin block user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: User blocked }
+        '403': { description: Admin only }
+
+  /users/{id}/unblock:
+    patch:
+      tags: [Users]
+      summary: Admin unblock user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: User unblocked }
+
+  /users/{id}/role:
+    patch:
+      tags: [Users]
+      summary: Admin change user role
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [user, admin] }
+      responses:
+        '200': { description: Role updated }
+
+  /users/{username}/posts:
+    get:
+      tags: [Users, Posts]
+      summary: Get published posts by username
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PostSummary' }
+                      meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # FOLLOW
+  # ══════════════════════════════════════════════════════════════════════════
+  /users/{userId}/follow:
+    post:
+      tags: [Follow]
+      summary: Follow a user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Followed (or already following — idempotent)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          isFollowing:   { type: boolean }
+                          followerCount: { type: integer }
+        '400': { description: Cannot follow yourself }
+        '404': { description: User not found }
+        '429': { description: Rate limit exceeded }
+
+    delete:
+      tags: [Follow]
+      summary: Unfollow a user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          isFollowing:   { type: boolean }
+                          followerCount: { type: integer }
+
+  /users/{userId}/followers:
+    get:
+      tags: [Follow]
+      summary: List followers of a user (cursor paginated)
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/FollowUser' }
+                      meta: { $ref: '#/components/schemas/CursorMeta' }
+
+  /users/{userId}/following:
+    get:
+      tags: [Follow]
+      summary: List users followed by a user (cursor paginated)
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/FollowUser' }
+                      meta: { $ref: '#/components/schemas/CursorMeta' }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # FEED
+  # ══════════════════════════════════════════════════════════════════════════
+  /feed/following:
+    get:
+      tags: [Feed]
+      summary: Following feed (posts from followed authors, cursor paginated)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+          description: >
+            Encoded cursor — publishedAt|_id of the last item (base64).
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PostSummary' }
+                      meta: { $ref: '#/components/schemas/CursorMeta' }
+        '401': { description: Authentication required }
+
+  /feed/trending:
+    get:
+      tags: [Feed]
+      summary: Trending feed (highest trendingScore, cursor paginated)
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PostSummary' }
+                      meta: { $ref: '#/components/schemas/CursorMeta' }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # VIEWS
+  # ══════════════════════════════════════════════════════════════════════════
+  /views:
+    post:
+      tags: [Views]
+      summary: Record a view event
+      description: >
+        Bot UAs, authenticated post owners/admins, and duplicate views within
+        the same calendar day are silently dropped (counted: false).
+        Sets an `anon_vid` cookie for anonymous deduplication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordViewInput' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RecordViewResult' }
+        '429': { description: Rate limit exceeded (10/min) }
+
+  /views/posts/{id}/analytics:
+    get:
+      tags: [Views]
+      summary: Get analytics for a specific post (owner or admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: range
+          schema: { type: string, enum: [7d, 30d, 90d], default: 30d }
+      responses:
+        '200': { description: Post analytics data }
+        '403': { description: Not the post author or admin }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # POSTS
+  # ══════════════════════════════════════════════════════════════════════════
+  /posts:
+    get:
+      tags: [Posts]
+      summary: List published posts (public, offset paginated)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: tag
+          schema: { type: string }
+        - in: query
+          name: category
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PostSummary' }
+                      meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    post:
+      tags: [Posts]
+      summary: Create a post (authenticated)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, excerpt, content]
+              properties:
+                title:      { type: string }
+                excerpt:    { type: string, maxLength: 500 }
+                content:    { type: string }
+                coverImage: { type: string, format: uri }
+                tags:       { type: array, items: { type: string } }
+                category:   { type: string }
+                status:     { type: string, enum: [draft, published, scheduled, pending] }
+                scheduledAt: { type: string, format: date-time }
+                seo:
+                  type: object
+                  properties:
+                    title:       { type: string }
+                    description: { type: string }
+                    ogImage:     { type: string }
+      responses:
+        '201': { description: Post created }
+        '401': { description: Authentication required }
+
+  /posts/{slug}:
+    get:
+      tags: [Posts]
+      summary: Get post by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Post data }
+        '404': { description: Post not found }
+
+    patch:
+      tags: [Posts]
+      summary: Update own post
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Post updated }
+        '403': { description: Not the author }
+
+    delete:
+      tags: [Posts]
+      summary: Delete own post (or admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Post deleted }
+
+  /posts/{id}/approve:
+    patch:
+      tags: [Posts]
+      summary: Admin approve post
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Post approved and published }
+        '403': { description: Admin only }
+
+  /posts/{id}/reject:
+    patch:
+      tags: [Posts]
+      summary: Admin reject post
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Post rejected }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # COMMENTS
+  # ══════════════════════════════════════════════════════════════════════════
+  /comments:
+    post:
+      tags: [Comments]
+      summary: Create a comment or reply
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [post, content]
+              properties:
+                post:    { type: string, description: Post ObjectId }
+                parent:  { type: string, description: Parent comment ObjectId (for replies) }
+                content: { type: string, maxLength: 2000 }
+      responses:
+        '201': { description: Comment created }
+
+  /comments/{postId}:
+    get:
+      tags: [Comments]
+      summary: List top-level comments for a post (cursor paginated)
+      parameters:
+        - in: path
+          name: postId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200': { description: Comments list with cursor meta }
+
+  /comments/{id}:
+    patch:
+      tags: [Comments]
+      summary: Update own comment
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Comment updated }
+
+    delete:
+      tags: [Comments]
+      summary: Delete own comment (or admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Comment deleted }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # LIKES
+  # ══════════════════════════════════════════════════════════════════════════
+  /likes:
+    post:
+      tags: [Likes]
+      summary: Like a post or comment (idempotent)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType, targetId]
+              properties:
+                targetType: { type: string, enum: [post, comment] }
+                targetId:   { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          liked:     { type: boolean }
+                          likeCount: { type: integer }
+
+    delete:
+      tags: [Likes]
+      summary: Unlike a post or comment (idempotent)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType, targetId]
+              properties:
+                targetType: { type: string, enum: [post, comment] }
+                targetId:   { type: string }
+      responses:
+        '200': { description: Unliked }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # UPLOAD
+  # ══════════════════════════════════════════════════════════════════════════
+  /upload:
+    post:
+      tags: [Upload]
+      summary: Upload an image to Cloudinary
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                folder:
+                  type: string
+                  description: Cloudinary folder (e.g. avatars, covers, posts)
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          url:       { type: string, format: uri }
+                          publicId:  { type: string }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # CONTACT
+  # ══════════════════════════════════════════════════════════════════════════
+  /contacts:
+    post:
+      tags: [Contact]
+      summary: Send a contact message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, subject, message]
+              properties:
+                name:    { type: string }
+                email:   { type: string, format: email }
+                subject: { type: string }
+                message: { type: string }
+      responses:
+        '201': { description: Message received }
+        '429': { description: Rate limit exceeded }
+
+    get:
+      tags: [Contact]
+      summary: List contact messages (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Messages list }
+
+  /contacts/{id}/reply:
+    post:
+      tags: [Contact]
+      summary: Admin reply to a contact message
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [replyMessage]
+              properties:
+                replyMessage: { type: string }
+      responses:
+        '200': { description: Reply sent }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # DASHBOARD
+  # ══════════════════════════════════════════════════════════════════════════
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Admin analytics dashboard
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: query
+          name: range
+          schema: { type: string, enum: [7d, 30d, 90d], default: 30d }
+      responses:
+        '200': { description: Dashboard metrics }
+        '403': { description: Admin only }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # PORTFOLIO MODULES (Profile, Skills, Projects, Experiences, Education, Testimonials)
+  # ══════════════════════════════════════════════════════════════════════════
+  /profile:
+    get:
+      tags: [Profile]
+      summary: Get portfolio owner public profile
+      responses:
+        '200': { description: Profile data }
+
+    patch:
+      tags: [Profile]
+      summary: Update portfolio profile (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Profile updated }
+
+  /skills:
+    get:
+      tags: [Skills]
+      summary: List skills
+      responses:
+        '200': { description: Skills list }
+
+    post:
+      tags: [Skills]
+      summary: Create skill (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Skill created }
+
+  /skills/{id}:
+    patch:
+      tags: [Skills]
+      summary: Update skill (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Skill updated }
+
+    delete:
+      tags: [Skills]
+      summary: Delete skill (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Skill deleted }
+
+  /projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      responses:
+        '200': { description: Projects list }
+
+    post:
+      tags: [Projects]
+      summary: Create project (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Project created }
+
+  /projects/{id}:
+    patch:
+      tags: [Projects]
+      summary: Update project (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Project updated }
+
+    delete:
+      tags: [Projects]
+      summary: Delete project (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Project deleted }
+
+  /experiences:
+    get:
+      tags: [Experiences]
+      summary: List work experiences
+      responses:
+        '200': { description: Experiences list }
+
+    post:
+      tags: [Experiences]
+      summary: Create experience (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Experience created }
+
+  /experiences/{id}:
+    patch:
+      tags: [Experiences]
+      summary: Update experience (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Experience updated }
+
+    delete:
+      tags: [Experiences]
+      summary: Delete experience (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Experience deleted }
+
+  /education:
+    get:
+      tags: [Education]
+      summary: List education history
+      responses:
+        '200': { description: Education list }
+
+    post:
+      tags: [Education]
+      summary: Create education entry (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Education created }
+
+  /education/{id}:
+    patch:
+      tags: [Education]
+      summary: Update education entry (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Education updated }
+
+    delete:
+      tags: [Education]
+      summary: Delete education entry (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Education deleted }
+
+  /testimonials:
+    get:
+      tags: [Testimonials]
+      summary: List testimonials
+      responses:
+        '200': { description: Testimonials list }
+
+    post:
+      tags: [Testimonials]
+      summary: Create testimonial (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Testimonial created }
+
+  /testimonials/{id}:
+    patch:
+      tags: [Testimonials]
+      summary: Update testimonial (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Testimonial updated }
+
+    delete:
+      tags: [Testimonials]
+      summary: Delete testimonial (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Testimonial deleted }
+
+  /site-settings:
+    get:
+      tags: [Site Settings]
+      summary: Get site settings (public)
+      responses:
+        '200': { description: Site settings }
+
+    patch:
+      tags: [Site Settings]
+      summary: Update site settings (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Settings updated }
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # INTERNAL (cron-triggered, protected by CRON_SECRET header)
+  # ══════════════════════════════════════════════════════════════════════════
+  /internal/update-trending:
+    post:
+      tags: [Internal]
+      summary: Recalculate trending scores for published posts
+      description: Called by Vercel Cron. Requires `x-cron-secret` header.
+      parameters:
+        - in: header
+          name: x-cron-secret
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Trending scores updated }
+        '401': { description: Invalid cron secret }
+
+  /internal/publish-scheduled:
+    post:
+      tags: [Internal]
+      summary: Publish posts whose scheduledAt has passed
+      description: Called by Vercel Cron. Requires `x-cron-secret` header.
+      parameters:
+        - in: header
+          name: x-cron-secret
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Scheduled posts published }
+        '401': { description: Invalid cron secret }

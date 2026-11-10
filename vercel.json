@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
+  "crons": [
+    {
+      "path": "/api/v1/internal/cron/trending",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

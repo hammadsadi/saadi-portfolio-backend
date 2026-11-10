@@ -1,0 +1,704 @@
+{
+  "info": {
+    "name": "Hammad Sadi Portfolio API",
+    "description": "REST API for the personal portfolio and blogging platform. Auth uses HTTP-only cookies.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "hs-portfolio-api-v1"
+  },
+  "variable": [
+    { "key": "baseUrl",   "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "userId",    "value": "",                          "type": "string" },
+    { "key": "postSlug",  "value": "",                          "type": "string" },
+    { "key": "postId",    "value": "",                          "type": "string" },
+    { "key": "commentId", "value": "",                          "type": "string" }
+  ],
+  "auth": {
+    "type": "noauth",
+    "description": "Cookies are set automatically by the server via Set-Cookie headers."
+  },
+  "item": [
+
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"password\": \"Secret1!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/verify-email",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"otp\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/resend-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"password\": \"Secret1!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/forgot-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Verify Reset OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/verify-reset-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"otp\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/reset-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"newPassword\": \"NewSecret1!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Google OAuth — Initiate",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/google"
+          }
+        },
+        {
+          "name": "GitHub OAuth — Initiate",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/github"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users (admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "role",   "value": "user", "disabled": true },
+                { "key": "isBlocked", "value": "false", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User by Username",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/janedev"
+          }
+        },
+        {
+          "name": "Update Own Profile",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/me",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"username\": \"janedev\",\n  \"bio\": \"Full-stack developer.\",\n  \"location\": \"Lahore, PK\",\n  \"website\": \"https://jane.dev\",\n  \"socialLinks\": [\n    { \"platform\": \"github\", \"url\": \"https://github.com/janedev\" }\n  ],\n  \"profileVisibility\": \"public\",\n  \"showProfileViews\": true,\n  \"notificationPreferences\": {\n    \"newFollower\": true,\n    \"comments\": true,\n    \"replies\": true,\n    \"productUpdates\": false\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users/me/change-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"OldSecret1!\",\n  \"newPassword\": \"NewSecret1!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Request Set-Password OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users/me/set-password/request"
+          }
+        },
+        {
+          "name": "Set Password (OAuth accounts)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users/me/set-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp\": \"123456\",\n  \"newPassword\": \"Secret1!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Request Delete-Account OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users/me/delete-account/request-otp"
+          }
+        },
+        {
+          "name": "Delete Account — Password user",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/me",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"Secret1!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Account — OAuth user",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/me",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "My Analytics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/me/analytics?range=30d",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "analytics"],
+              "query": [{ "key": "range", "value": "30d" }]
+            }
+          }
+        },
+        {
+          "name": "Admin Update User",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/{{userId}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isBlocked\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Admin Block User",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/{{userId}}/block"
+          }
+        },
+        {
+          "name": "Admin Unblock User",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/{{userId}}/unblock"
+          }
+        },
+        {
+          "name": "Admin Change Role",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/{{userId}}/role",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Posts by Username",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/janedev/posts"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Follow",
+      "item": [
+        {
+          "name": "Follow User",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/users/{{userId}}/follow"
+          }
+        },
+        {
+          "name": "Unfollow User",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/{{userId}}/follow"
+          }
+        },
+        {
+          "name": "List Followers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/followers?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "followers"],
+              "query": [
+                { "key": "limit",  "value": "20" },
+                { "key": "cursor", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Following",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/following?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "following"],
+              "query": [
+                { "key": "limit",  "value": "20" },
+                { "key": "cursor", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Follow Suggestions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/suggestions?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "suggestions"],
+              "query": [{ "key": "limit", "value": "10" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Feed",
+      "item": [
+        {
+          "name": "Following Feed",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/feed/following?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["feed", "following"],
+              "query": [
+                { "key": "limit",  "value": "20" },
+                { "key": "cursor", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trending Feed",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/feed/trending?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["feed", "trending"],
+              "query": [
+                { "key": "limit",  "value": "20" },
+                { "key": "cursor", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Views",
+      "item": [
+        {
+          "name": "Record View — Post",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/views",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetType\": \"post\",\n  \"targetId\": \"{{postId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Record View — Profile",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/views",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetType\": \"profile\",\n  \"targetId\": \"{{userId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Post Analytics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/views/posts/{{postId}}/analytics?range=30d",
+              "host": ["{{baseUrl}}"],
+              "path": ["views", "posts", "{{postId}}", "analytics"],
+              "query": [{ "key": "range", "value": "30d" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Posts",
+      "item": [
+        {
+          "name": "List Posts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/posts?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["posts"],
+              "query": [
+                { "key": "page",     "value": "1" },
+                { "key": "limit",    "value": "20" },
+                { "key": "search",   "value": "", "disabled": true },
+                { "key": "tag",      "value": "", "disabled": true },
+                { "key": "category", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Post by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/posts/{{postSlug}}"
+          }
+        },
+        {
+          "name": "Create Post",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/posts",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"My First Post\",\n  \"excerpt\": \"A short intro to this post.\",\n  \"content\": \"# My First Post\\n\\nFull content here.\",\n  \"tags\": [\"typescript\", \"nodejs\"],\n  \"category\": \"Engineering\",\n  \"status\": \"draft\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Post",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/posts/{{postSlug}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"pending\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Post",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/posts/{{postSlug}}"
+          }
+        },
+        {
+          "name": "Admin Approve Post",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/posts/{{postId}}/approve"
+          }
+        },
+        {
+          "name": "Admin Reject Post",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/posts/{{postId}}/reject",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Needs more detail in section 2.\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Comments",
+      "item": [
+        {
+          "name": "List Comments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/comments/{{postId}}?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["comments", "{{postId}}"],
+              "query": [
+                { "key": "limit",  "value": "20" },
+                { "key": "cursor", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Comment",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/comments",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"post\": \"{{postId}}\",\n  \"content\": \"Great post!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Reply",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/comments",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"post\": \"{{postId}}\",\n  \"parent\": \"{{commentId}}\",\n  \"content\": \"Agreed!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Comment",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/comments/{{commentId}}"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Likes",
+      "item": [
+        {
+          "name": "Like Post",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/likes",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetType\": \"post\",\n  \"targetId\": \"{{postId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Unlike Post",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/likes",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetType\": \"post\",\n  \"targetId\": \"{{postId}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Upload",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",   "type": "file",  "src": "" },
+                { "key": "folder", "type": "text",  "value": "avatars" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Contact",
+      "item": [
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/contacts",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Visitor\",\n  \"email\": \"visitor@example.com\",\n  \"subject\": \"Collaboration enquiry\",\n  \"message\": \"Hi, I'd love to work together.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Messages (admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/contacts"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dashboard?range=30d",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"],
+              "query": [{ "key": "range", "value": "30d" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Internal",
+      "item": [
+        {
+          "name": "Update Trending Scores",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/internal/update-trending",
+            "header": [{ "key": "x-cron-secret", "value": "<CRON_SECRET>" }]
+          }
+        },
+        {
+          "name": "Publish Scheduled Posts",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/internal/publish-scheduled",
+            "header": [{ "key": "x-cron-secret", "value": "<CRON_SECRET>" }]
+          }
+        }
+      ]
+    }
+
+  ]
+}
